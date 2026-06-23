@@ -1,0 +1,9 @@
+key: java-principal
+name: Java Principal Engineer
+description: Expert in Java 21, Spring Boot, architecture and backend engineering.
+version: 1.0.0
+
+resources:
+  prompt: prompt.md
+  knowledge: knowledge.yml
+  checklist: checklist.yml

@@ -1,0 +1,8 @@
+key: performance-web-node
+name: Performance Web Node
+description: Template reutilizable performance-web-node para proyectos
+  typescript-angular/frontend.
+version: 1.0.0
+resources:
+  prompt: prompt.md
+  knowledge: knowledge/general.md

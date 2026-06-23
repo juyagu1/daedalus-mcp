@@ -1,0 +1,8 @@
+key: typescript-angular-plan
+name: Typescript Angular Plan
+description: Template reutilizable typescript-angular-plan para proyectos
+  typescript-angular/frontend.
+version: 1.0.0
+resources:
+  prompt: prompt.md
+  knowledge: knowledge/general.md

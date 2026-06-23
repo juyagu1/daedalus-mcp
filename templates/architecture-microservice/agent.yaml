@@ -1,0 +1,8 @@
+key: architecture-microservice
+name: Architecture Microservice
+description: Template reutilizable architecture-microservice para proyectos
+  java21-spring-boot/microservice.
+version: 1.0.0
+resources:
+  prompt: prompt.md
+  knowledge: knowledge/general.md

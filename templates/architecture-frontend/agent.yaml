@@ -1,0 +1,8 @@
+key: architecture-frontend
+name: Architecture Frontend
+description: Template reutilizable architecture-frontend para proyectos
+  typescript-angular/frontend.
+version: 1.0.0
+resources:
+  prompt: prompt.md
+  knowledge: knowledge/general.md

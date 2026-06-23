@@ -1,0 +1,8 @@
+key: project-rules-validator
+name: Project Rules Validator
+description: Template reutilizable project-rules-validator para proyectos
+  typescript-angular/frontend.
+version: 1.0.0
+resources:
+  prompt: prompt.md
+  knowledge: knowledge/general.md

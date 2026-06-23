@@ -1,0 +1,8 @@
+key: java21-spring-boot-plan
+name: Java21 Spring Boot Plan
+description: Template reutilizable java21-spring-boot-plan para proyectos
+  java21-spring-boot/microservice.
+version: 1.0.0
+resources:
+  prompt: prompt.md
+  knowledge: knowledge/general.md

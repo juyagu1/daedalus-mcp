@@ -1,0 +1,8 @@
+key: performance-jvm
+name: Performance Jvm
+description: Template reutilizable performance-jvm para proyectos
+  java21-spring-boot/microservice.
+version: 1.0.0
+resources:
+  prompt: prompt.md
+  knowledge: knowledge/general.md
