@@ -133,7 +133,7 @@ export async function runAgentPipeline(params: {
     lines.push(`### Result`, "", input, "");
   }
 
-  lines.push("## Consolidated recommendation", "", "Revisá las secciones por proyecto/agente anteriores. Si el host MCP soporta sampling, cada sección contiene la evaluación generada por el modelo; si no, contiene un reporte determinístico con el contexto cargado.");
+  lines.push("## Consolidated recommendation", "", "Revisá las secciones por proyecto/agente anteriores. Si el host MCP soporta sampling, cada sección contiene la evaluación generada por el modelo. Si no soporta sampling, Daedalus devuelve un reporte/handoff sin error para que el asistente host ejecute el razonamiento usando el contexto preparado.");
   return lines.join("\n");
 }
 
@@ -338,7 +338,7 @@ async function ensureProjectAgents(workspaceRoot: string, project: ProjectInfo, 
     const files: Array<[string, string, boolean]> = [
       [path.join(dir, "agent.yaml"), YAML.stringify({ name, template, role: name, version: 1 }), opts.force],
       [path.join(dir, "prompt.md"), await readIfExists(path.join(templatesRoot, template, "prompt.md")) ?? defaultPromptForTemplate(template, project), opts.force],
-      [path.join(dir, "knowledge", "general", "general.md"), await readIfExists(path.join(templatesRoot, template, "knowledge", "general.md")) ?? defaultKnowledgeForTemplate(template, project), opts.force],
+      [path.join(dir, "knowledge", "general", "general.md"), projectAgentKnowledge(name, template, project), opts.refreshProjectKnowledge],
       [path.join(dir, "knowledge", "project", "rules.md"), projectRules(project), opts.refreshProjectKnowledge],
       [path.join(dir, "knowledge", "project", "structure.md"), await projectStructure(projectRoot), opts.refreshProjectKnowledge],
       [path.join(dir, "knowledge", "project", "dependencies.md"), await projectDependencies(projectRoot), opts.refreshProjectKnowledge],
@@ -355,7 +355,7 @@ async function readWorkspaceConfig(workspacePath?: string): Promise<WorkspaceCon
   const root = path.resolve(workspacePath ?? process.env.INIT_CWD ?? process.cwd());
   const configPath = path.join(root, ".engineering-agents", "workspace.agents.yaml");
   const raw = await readIfExists(configPath);
-  if (!raw) throw new Error(`No existe ${configPath}. Ejecutá primero /agent init.`);
+  if (!raw) throw new Error(`No existe ${configPath}. Ejecutá primero /daedalus init.`);
   return YAML.parse(raw) as WorkspaceConfig;
 }
 
@@ -364,13 +364,13 @@ function selectProjects(config: WorkspaceConfig, group?: string, projects?: stri
   if (projects?.length) names = projects;
   else if (group) {
     const g = config.groups[group];
-    if (!g) throw new Error(`Grupo no encontrado: ${group}. Usá /agent listGroups.`);
+    if (!g) throw new Error(`Grupo no encontrado: ${group}. Usá /daedalus listGroups.`);
     names = g.projects;
   } else names = config.groups.all?.projects ?? [];
   const byName = new Map(config.projects.map((p) => [p.name, p]));
   return names.map((name) => {
     const p = byName.get(name);
-    if (!p) throw new Error(`Proyecto no encontrado: ${name}. Usá /agent listProjects.`);
+    if (!p) throw new Error(`Proyecto no encontrado: ${name}. Usá /daedalus listProjects.`);
     return p;
   });
 }
@@ -390,7 +390,13 @@ async function buildAgentPrompt(workspaceRoot: string, project: ProjectInfo, ste
 }
 
 function fallbackAgentOutput(project: ProjectInfo, step: string, input: string): string {
-  return `Agente ${step} preparado para ${project.name}. Stack: ${project.stack}. Arquitectura: ${project.architecture}. Input recibido: ${input}`;
+  return `Daedalus preparó el contexto para el agente **${step}** en **${project.name}**, pero este host no expuso sampling MCP para ejecutar el modelo dentro del servidor.
+
+- Stack detectado: ${project.stack}
+- Arquitectura detectada: ${project.architecture}
+- Input recibido: ${input}
+
+El asistente host debe usar el prompt/contexto cargado por Daedalus para producir el análisis de este paso en la respuesta final.`;
 }
 
 function resolveProjectRoot(workspaceRoot: string, project: ProjectInfo): string {
@@ -404,7 +410,14 @@ function stackKey(language: string, version?: string, framework?: string): strin
 
 function cleanVersion(v: string): string { return v.replace(/[~^$\[\](){}'\"]/g, "").trim(); }
 function titleize(key: string): string { return key.split("-").map((p) => p.charAt(0).toUpperCase() + p.slice(1)).join(" "); }
-function templateDescription(key: string, project: ProjectInfo): string { return `Template reutilizable ${key} para proyectos ${project.stack}/${project.architecture}.`; }
+function templateDescription(key: string, project: ProjectInfo): string {
+  if (isGenericTemplate(key)) return `Template reutilizable ${key}.`;
+  return `Template reutilizable ${key} para proyectos ${project.stack}/${project.architecture}.`;
+}
+
+function isGenericTemplate(key: string): boolean {
+  return key === "project-rules-validator" || key.startsWith("performance-") || key.startsWith("architecture-");
+}
 
 function defaultPromptForTemplate(key: string, project: ProjectInfo): string {
   if (key.includes("rules")) return "# Agente Rules\n\nValidá que la propuesta cumpla las reglas, convenciones y restricciones particulares del proyecto. Marcá incumplimientos y correcciones.";
@@ -414,7 +427,63 @@ function defaultPromptForTemplate(key: string, project: ProjectInfo): string {
 }
 
 function defaultKnowledgeForTemplate(key: string, project: ProjectInfo): string {
-  return `# Knowledge general: ${key}\n\n- Stack objetivo: ${project.stack}.\n- Lenguaje: ${project.language}${project.languageVersion ? ` ${project.languageVersion}` : ""}.\n- Framework: ${project.framework ?? "no detectado"}.\n- Arquitectura esperada: ${project.architecture}.\n- Priorizá cambios pequeños, testeables, observables y compatibles con el estilo existente.\n`;
+  if (key === "project-rules-validator") {
+    return `# Knowledge general: ${key}
+
+- Validá convenciones, reglas locales, estructura existente y restricciones documentadas del proyecto.
+- No asumas un stack fijo: el stack real viene en knowledge/project y metadata del proyecto.
+- Marcá incumplimientos con severidad, evidencia y corrección recomendada.
+`;
+  }
+  if (key === "performance-jvm") {
+    return `# Knowledge general: ${key}
+
+- Revisá latencia, memoria, GC, pools de threads, conexiones HTTP/DB, N+1 queries, timeouts y backpressure.
+- Preferí mediciones, límites explícitos, observabilidad y cambios incrementales.
+`;
+  }
+  if (key === "performance-web-node") {
+    return `# Knowledge general: ${key}
+
+- Revisá bundle size, rendering, change detection, lazy loading, caching, llamadas HTTP, SSR/CSR y memoria del runtime Node/browser.
+- Preferí mediciones, presupuestos de performance y cambios incrementales.
+`;
+  }
+  if (key.startsWith("performance-")) {
+    return `# Knowledge general: ${key}
+
+- Revisá latencia, memoria, IO, concurrencia, caching, timeouts, observabilidad y escalabilidad.
+`;
+  }
+  if (key.startsWith("architecture-")) {
+    return `# Knowledge general: ${key}
+
+- Validá límites arquitectónicos, dependencias, responsabilidades, contratos, mantenibilidad y consistencia con el estilo del proyecto.
+- No asumas un stack fijo: el stack real viene en knowledge/project y metadata del proyecto.
+`;
+  }
+  return `# Knowledge general: ${key}
+
+- Stack objetivo: ${project.stack}.
+- Lenguaje: ${project.language}${project.languageVersion ? ` ${project.languageVersion}` : ""}.
+- Framework: ${project.framework ?? "no detectado"}.
+- Arquitectura esperada: ${project.architecture}.
+- Priorizá cambios pequeños, testeables, observables y compatibles con el estilo existente.
+`;
+}
+
+function projectAgentKnowledge(agentName: string, template: string, project: ProjectInfo): string {
+  return `# Knowledge general del agente ${agentName}
+
+- Template base: ${template}.
+- Proyecto: ${project.name}.
+- Stack detectado: ${project.stack}.
+- Lenguaje: ${project.language}${project.languageVersion ? ` ${project.languageVersion}` : ""}.
+- Framework: ${project.framework ?? "no detectado"}.
+- Arquitectura detectada: ${project.architecture}.
+- Build/package manager: ${project.buildTool ?? project.packageManager ?? "no detectado"}.
+- Priorizá cambios pequeños, testeables, observables y compatibles con el estilo existente.
+`;
 }
 
 function projectRules(project: ProjectInfo): string {

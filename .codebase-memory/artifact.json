@@ -1,11 +1,11 @@
 {
     "schema_version": 1,
-    "commit": "",
-    "indexed_at": "2026-06-23T22:41:05Z",
+    "commit": "2f304dc9128b5873cc614fdc06e27e7182b97c40",
+    "indexed_at": "2026-06-23T23:29:48Z",
     "project": "Users-christianvoneggers-Developer-engineering-agents-mcp",
-    "nodes": 193,
-    "edges": 284,
-    "original_size": 1310720,
-    "compressed_size": 27960,
-    "compression_level": 9
+    "nodes": 236,
+    "edges": 325,
+    "original_size": 1900544,
+    "compressed_size": 49203,
+    "compression_level": 3
 }

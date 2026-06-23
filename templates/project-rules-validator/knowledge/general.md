@@ -1,7 +1,5 @@
 # Knowledge general: project-rules-validator
 
-- Stack objetivo: typescript-angular.
-- Lenguaje: typescript.
-- Framework: angular.
-- Arquitectura esperada: frontend.
-- Priorizá cambios pequeños, testeables, observables y compatibles con el estilo existente.
+- Validá convenciones, reglas locales, estructura existente y restricciones documentadas del proyecto.
+- No asumas un stack fijo: el stack real viene en knowledge/project y metadata del proyecto.
+- Marcá incumplimientos con severidad, evidencia y corrección recomendada.

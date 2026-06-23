@@ -1,7 +1,4 @@
 # Knowledge general: performance-jvm
 
-- Stack objetivo: java21-spring-boot.
-- Lenguaje: java 21.
-- Framework: spring-boot.
-- Arquitectura esperada: microservice.
-- Priorizá cambios pequeños, testeables, observables y compatibles con el estilo existente.
+- Revisá latencia, memoria, GC, pools de threads, conexiones HTTP/DB, N+1 queries, timeouts y backpressure.
+- Preferí mediciones, límites explícitos, observabilidad y cambios incrementales.

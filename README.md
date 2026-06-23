@@ -62,6 +62,18 @@ templates/
 
 Daedalus does **not overwrite existing files by default**.
 
+## Available MCP prompts / slash commands
+
+Daedalus also registers MCP prompts named `daedalus` and `daedalus-init`. In clients that expose MCP prompts as slash commands, you can use:
+
+```txt
+/daedalus init
+/daedalus listProjects
+/daedalus plan --group:java-all "agregar healthcheck estándar"
+```
+
+If the client says the slash command does not exist, use natural language or the `daedalus` tool directly, for example: “Use Daedalus and run `/daedalus init`”. Slash command availability is controlled by the host client, not by the MCP server alone.
+
 ## Available MCP tools
 
 ### `daedalus_init`
@@ -239,6 +251,37 @@ startup_timeout_sec = 60
 
 Restart Codex.
 
+
+## Claude Code slash command `/daedalus`
+
+Claude Code slash commands are client-side prompt files. If `/daedalus` is not recognized even though the MCP server is running, create this user-level command:
+
+```bash
+mkdir -p ~/.claude/commands
+cat > ~/.claude/commands/daedalus.md <<'EOF'
+---
+description: Run Daedalus MCP commands
+allowed-tools: mcp__daedalus__daedalus, mcp__daedalus__daedalus_init, mcp__daedalus__daedalus_listProjects, mcp__daedalus__daedalus_listGroups, mcp__daedalus__daedalus_run
+---
+
+Use the Daedalus MCP server. Run the MCP tool `daedalus` with:
+
+```json
+{ "command": "/daedalus $ARGUMENTS" }
+```
+
+If `$ARGUMENTS` is empty, use `/daedalus init`. Summarize the MCP result for the user.
+EOF
+```
+
+Restart Claude Code after creating or changing this file. Then use:
+
+```txt
+/daedalus init
+/daedalus listProjects
+/daedalus plan --group:java-all "agregar healthcheck estándar"
+```
+
 ## Add to Claude Desktop
 
 Edit:
@@ -397,5 +440,5 @@ npx tsc --noEmit
 - Daedalus uses MCP `roots/list` when available to identify the workspace opened in the client.
 - If roots are unavailable, it falls back to the process `cwd`.
 - `workspacePath` can be provided manually as an override.
-- Existing generated files are preserved by default.
-- Pipeline execution uses MCP sampling when the host supports it; otherwise Daedalus returns a deterministic report with the prepared context.
+- Existing generated files are preserved by default. If a previous init generated stale project knowledge, rerun init with `refreshProjectKnowledge: true` to regenerate generated `knowledge/general` and `knowledge/project` files.
+- Pipeline execution uses MCP sampling when the host supports it. Some hosts return `MCP error -32601: Method not found` for sampling; in that case Daedalus now catches it and returns a handoff report with the prepared agent prompts/context so the host assistant can execute the reasoning in its final response.

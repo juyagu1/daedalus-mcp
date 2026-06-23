@@ -1,7 +1,4 @@
-# Knowledge general: architecture-microservice
+# Knowledge general: architecture
 
-- Stack objetivo: java21-spring-boot.
-- Lenguaje: java 21.
-- Framework: spring-boot.
-- Arquitectura esperada: microservice.
-- Priorizá cambios pequeños, testeables, observables y compatibles con el estilo existente.
+- Validá límites arquitectónicos, dependencias, responsabilidades, contratos, mantenibilidad y consistencia con el estilo del proyecto.
+- No asumas un stack fijo: el stack real viene en knowledge/project y metadata del proyecto.

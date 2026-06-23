@@ -1,0 +1,8 @@
+key: typescript-react-plan
+name: Typescript React Plan
+description: Template reutilizable typescript-react-plan para proyectos
+  typescript-react/frontend.
+version: 1.0.0
+resources:
+  prompt: prompt.md
+  knowledge: knowledge/general.md

@@ -28,6 +28,35 @@ function text(content: unknown) {
   return { content: [{ type: "text" as const, text: typeof content === "string" ? content : YAML.stringify(content) }] };
 }
 
+
+server.registerPrompt("daedalus", {
+  title: "Daedalus slash command",
+  description: "Usá este prompt como /daedalus. Ejemplos: init, listProjects, listGroups, plan --group:java-all \"tarea\".",
+  argsSchema: {
+    command: z.string().optional().describe("Comando sin el prefijo /daedalus. Ej: init, listProjects, plan --group:java-all \"agregar healthcheck\".")
+  }
+}, async ({ command }) => {
+  const normalized = command?.trim() ? `/daedalus ${command.trim()}` : "/daedalus init";
+  return {
+    messages: [
+      {
+        role: "user",
+        content: {
+          type: "text",
+          text: `Ejecutá la tool MCP daedalus con este input exacto:\n\n${JSON.stringify({ command: normalized }, null, 2)}\n\nLuego resumí el resultado para el usuario. Si el resultado contiene un handoff porque el host no soporta sampling MCP, usá los prompts/contexto devueltos para completar el análisis en esta misma respuesta.`
+        }
+      }
+    ]
+  };
+});
+
+server.registerPrompt("daedalus-init", {
+  title: "Daedalus init",
+  description: "Inicializa Daedalus en el workspace actual. Equivale a /daedalus init."
+}, async () => ({
+  messages: [{ role: "user", content: { type: "text", text: 'Ejecutá la tool MCP daedalus con este input exacto: {"command":"/daedalus init"}. Luego resumí el resultado.' } }]
+}));
+
 server.registerTool("daedalus_init", {
   title: "Initialize Engineering Agents",
   description: "Escanea el workspace actual, crea templates reutilizables si faltan y genera agents.config.yaml + agents/ por proyecto sin pisar archivos existentes.",
@@ -80,17 +109,7 @@ server.registerTool("daedalus_run", {
     ...clean({ pipeline, task, group, projects, workspacePath: await defaultWorkspacePath(workspacePath) }),
     pipeline,
     task,
-    sample: async (prompt) => {
-      try {
-        const response = await server.server.createMessage({
-          messages: [{ role: "user", content: { type: "text", text: prompt } }],
-          maxTokens: 1200
-        });
-        return response.content.type === "text" ? response.content.text : JSON.stringify(response.content);
-      } catch (error) {
-        return `No se pudo ejecutar sampling del host MCP (${error instanceof Error ? error.message : String(error)}).\n\nPrompt preparado:\n\n\`\`\`md\n${prompt.slice(0, 6000)}\n\`\`\``;
-      }
-    }
+    sample: createSampler()
   });
   return text(report);
 });
@@ -130,6 +149,33 @@ server.registerTool("agent", {
   const report = await runAgentPipeline({ ...clean({ group: parsed.group, projects: parsed.projects, workspacePath: await defaultWorkspacePath(workspacePath) }), pipeline: parsed.pipeline, task: parsed.task });
   return text(report);
 });
+
+function createSampler(): (prompt: string) => Promise<string> {
+  let samplingUnavailable: string | undefined;
+  return async (prompt: string) => {
+    if (samplingUnavailable) return samplingHandoff(prompt, samplingUnavailable);
+    try {
+      const response = await server.server.createMessage({
+        messages: [{ role: "user", content: { type: "text", text: prompt } }],
+        maxTokens: 1200
+      });
+      return response.content.type === "text" ? response.content.text : JSON.stringify(response.content);
+    } catch (error) {
+      samplingUnavailable = error instanceof Error ? error.message : String(error);
+      return samplingHandoff(prompt, samplingUnavailable);
+    }
+  };
+}
+
+function samplingHandoff(prompt: string, reason: string): string {
+  return `Sampling MCP no disponible en este host (${reason}). Daedalus no puede invocar el modelo desde el servidor, así que entrega este handoff para que el asistente host ejecute el paso en su respuesta final.
+
+## Prompt preparado para este agente
+
+\`\`\`md
+${prompt.slice(0, 8000)}
+\`\`\``;
+}
 
 function parseAgentCommand(raw: string):
   | { kind: "init" | "listProjects" | "listGroups" }
