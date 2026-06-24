@@ -31,9 +31,9 @@ function text(content: unknown) {
 
 server.registerPrompt("daedalus", {
   title: "Daedalus slash command",
-  description: "Usá este prompt como /daedalus. Ejemplos: init, listProjects, listGroups, plan --group:java-all \"tarea\".",
+  description: "Usá este prompt como /daedalus. Ejemplos: init, listProjects, listGroups, plan/review --group:java-all \"tarea\".",
   argsSchema: {
-    command: z.string().optional().describe("Comando sin el prefijo /daedalus. Ej: init, listProjects, plan --group:java-all \"agregar healthcheck\".")
+    command: z.string().optional().describe("Comando sin el prefijo /daedalus. Ej: init, listProjects, plan --group:java-all \"agregar healthcheck\", review --project [api] \"revisar diff actual\".")
   }
 }, async ({ command }) => {
   const normalized = command?.trim() ? `/daedalus ${command.trim()}` : "/daedalus init";
@@ -96,9 +96,9 @@ server.registerTool("daedalus_listGroups", {
 
 server.registerTool("daedalus_run", {
   title: "Run agent pipeline",
-  description: "Ejecuta un pipeline como plan sobre un grupo o lista de proyectos y devuelve un reporte por agente/proyecto.",
+  description: "Ejecuta un pipeline como plan o review sobre un grupo o lista de proyectos y devuelve un reporte por agente/proyecto.",
   inputSchema: {
-    pipeline: z.string().default("plan").describe("Nombre del pipeline, por ejemplo plan."),
+    pipeline: z.string().default("plan").describe("Nombre del pipeline, por ejemplo plan o review."),
     task: z.string().describe("Tarea/requerimiento a analizar."),
     group: z.string().optional().describe("Grupo, por ejemplo java-all, angular-all o all."),
     projects: z.array(z.string()).optional().describe("Lista explícita de proyectos, equivalente a --project [a,b]."),
@@ -114,9 +114,28 @@ server.registerTool("daedalus_run", {
   return text(report);
 });
 
+server.registerTool("daedalus_review", {
+  title: "Run Daedalus code review",
+  description: "Ejecuta el pipeline review: code-review -> rules -> performance -> architecture, usando mejores prácticas del lenguaje y reglas del proyecto.",
+  inputSchema: {
+    task: z.string().describe("Código, diff, archivos o descripción del cambio a revisar."),
+    group: z.string().optional().describe("Grupo, por ejemplo java-all, angular-all o all."),
+    projects: z.array(z.string()).optional().describe("Lista explícita de proyectos, equivalente a --project [a,b]."),
+    workspacePath: z.string().optional()
+  }
+}, async ({ task, group, projects, workspacePath }) => {
+  const report = await runAgentPipeline({
+    ...clean({ group, projects, workspacePath: await defaultWorkspacePath(workspacePath) }),
+    pipeline: "review",
+    task,
+    sample: createSampler()
+  });
+  return text(report);
+});
+
 server.registerTool("daedalus", {
   title: "Agent command parser",
-  description: "Parser conveniente para comandos estilo `/daedalus init`, `/daedalus listProjects`, `/daedalus plan --group:java-all \"tarea\"` o `/daedalus plan --project [a,b] \"tarea\"`. También acepta `/agent` por compatibilidad.",
+  description: "Parser conveniente para comandos estilo `/daedalus init`, `/daedalus listProjects`, `/daedalus plan --group:java-all \"tarea\"`, `/daedalus review --project [a,b] \"revisar diff\"`. También acepta `/agent` por compatibilidad.",
   inputSchema: { command: z.string(), workspacePath: z.string().optional() }
 }, async ({ command, workspacePath }) => {
   const parsed = parseAgentCommand(command);
@@ -124,7 +143,7 @@ server.registerTool("daedalus", {
   if (parsed.kind === "listProjects") return text({ command: "/daedalus listProjects", projects: await listProjects(await defaultWorkspacePath(workspacePath)) });
   if (parsed.kind === "listGroups") return text({ command: "/daedalus listGroups", groups: await listGroups(await defaultWorkspacePath(workspacePath)) });
   if (parsed.kind !== "run") throw new Error("Comando no reconocido");
-  const report = await runAgentPipeline({ ...clean({ group: parsed.group, projects: parsed.projects, workspacePath: await defaultWorkspacePath(workspacePath) }), pipeline: parsed.pipeline, task: parsed.task });
+  const report = await runAgentPipeline({ ...clean({ group: parsed.group, projects: parsed.projects, workspacePath: await defaultWorkspacePath(workspacePath) }), pipeline: parsed.pipeline, task: parsed.task, sample: createSampler() });
   return text(report);
 });
 
@@ -146,7 +165,7 @@ server.registerTool("agent", {
   if (parsed.kind === "listProjects") return text({ command: "/daedalus listProjects", projects: await listProjects(await defaultWorkspacePath(workspacePath)) });
   if (parsed.kind === "listGroups") return text({ command: "/daedalus listGroups", groups: await listGroups(await defaultWorkspacePath(workspacePath)) });
   if (parsed.kind !== "run") throw new Error("Comando no reconocido");
-  const report = await runAgentPipeline({ ...clean({ group: parsed.group, projects: parsed.projects, workspacePath: await defaultWorkspacePath(workspacePath) }), pipeline: parsed.pipeline, task: parsed.task });
+  const report = await runAgentPipeline({ ...clean({ group: parsed.group, projects: parsed.projects, workspacePath: await defaultWorkspacePath(workspacePath) }), pipeline: parsed.pipeline, task: parsed.task, sample: createSampler() });
   return text(report);
 });
 
@@ -190,7 +209,7 @@ function parseAgentCommand(raw: string):
   const projects = projectMatch?.[1]?.split(",").map((p) => p.trim()).filter(Boolean);
   const quoted = [...command.matchAll(/"([^"]+)"|'([^']+)'/g)].at(-1);
   const task = quoted?.[1] ?? quoted?.[2] ?? command.replace(pipeline, "").replace(/--group:[\w.-]+/, "").replace(/--project\s*\[[^\]]+\]/, "").trim();
-  if (!task) throw new Error("Falta la tarea. Ejemplo: /daedalus plan --group:java-all \"agregar healthcheck estándar\"");
+  if (!task) throw new Error("Falta la tarea. Ejemplo: /daedalus review --group:java-all \"revisar el diff actual\"");
   return { kind: "run", pipeline, task, ...(group ? { group } : {}), ...(projects?.length ? { projects } : {}) };
 }
 

@@ -122,7 +122,7 @@ export async function runAgentPipeline(params: {
   for (const project of selected) {
     lines.push(`## Project: ${project.name}`, "");
     const projectConfig = await readProjectAgentConfig(config.workspace.root, project);
-    const pipeline = projectConfig?.pipelines?.[params.pipeline]?.steps ?? ["plan", "rules", "performance", "architecture"];
+    const pipeline = projectConfig?.pipelines?.[params.pipeline]?.steps ?? defaultPipelineSteps(params.pipeline);
     let input = params.task;
     for (const step of pipeline) {
       const prompt = await buildAgentPrompt(config.workspace.root, project, step, input, params.task);
@@ -135,6 +135,11 @@ export async function runAgentPipeline(params: {
 
   lines.push("## Consolidated recommendation", "", "Revisá las secciones por proyecto/agente anteriores. Si el host MCP soporta sampling, cada sección contiene la evaluación generada por el modelo. Si no soporta sampling, Daedalus devuelve un reporte/handoff sin error para que el asistente host ejecute el razonamiento usando el contexto preparado.");
   return lines.join("\n");
+}
+
+function defaultPipelineSteps(pipeline: string): string[] {
+  if (pipeline === "review" || pipeline === "code-review") return ["code-review", "rules", "performance", "architecture"];
+  return ["plan", "rules", "performance", "architecture"];
 }
 
 async function scanWorkspace(root: string, maxDepth: number): Promise<ProjectInfo[]> {
@@ -295,7 +300,7 @@ function selectorForGroup(key: string): Record<string, string> {
 function templatesForProject(project: ProjectInfo): string[] {
   const arch = `architecture-${project.architecture}`;
   const performance = project.language === "java" ? "performance-jvm" : project.language === "typescript" || project.language === "javascript" ? "performance-web-node" : `performance-${project.language}`;
-  return [`${project.stack}-plan`, "project-rules-validator", performance, arch];
+  return [`${project.stack}-plan`, `${project.stack}-code-review`, "project-rules-validator", performance, arch];
 }
 
 async function ensureTemplate(key: string, project: ProjectInfo, opts: { force: boolean }): Promise<{ path: string; created: boolean }> {
@@ -319,12 +324,15 @@ async function ensureProjectAgents(workspaceRoot: string, project: ProjectInfo, 
   const projectRoot = resolveProjectRoot(workspaceRoot, project);
   const created: string[] = [];
   const skipped: string[] = [];
-  const agentNames = ["plan", "rules", "performance", "architecture"];
+  const agentNames = ["plan", "code-review", "rules", "performance", "architecture"];
   const projectConfig = {
     version: 1,
     project,
     agents: agentNames.map((name, i) => ({ name, template: templateKeys[i], role: name })),
-    pipelines: { plan: { description: "Crea un plan técnico y lo valida contra reglas, performance y arquitectura.", steps: agentNames } }
+    pipelines: {
+      plan: { description: "Crea un plan técnico y lo valida contra reglas, performance y arquitectura.", steps: ["plan", "rules", "performance", "architecture"] },
+      review: { description: "Hace code review con mejores prácticas del lenguaje y reglas propias del proyecto.", steps: ["code-review", "rules", "performance", "architecture"] }
+    }
   };
   const cfgPath = path.join(projectRoot, "agents.config.yaml");
   (await writeFileNoOverwrite(cfgPath, YAML.stringify(projectConfig), { force: opts.force })).created ? created.push(cfgPath) : skipped.push(cfgPath);
@@ -420,6 +428,7 @@ function isGenericTemplate(key: string): boolean {
 }
 
 function defaultPromptForTemplate(key: string, project: ProjectInfo): string {
+  if (key.includes("code-review")) return `# Agente Code Review\n\nSos especialista en ${project.stack}. Revisá código, diffs o descripciones de cambios aplicando mejores prácticas del lenguaje/framework, calidad, mantenibilidad, seguridad básica, tests y compatibilidad con el proyecto. Devolvé hallazgos priorizados con evidencia y corrección sugerida.`;
   if (key.includes("rules")) return "# Agente Rules\n\nValidá que la propuesta cumpla las reglas, convenciones y restricciones particulares del proyecto. Marcá incumplimientos y correcciones.";
   if (key.includes("performance")) return "# Agente Performance\n\nEvaluá impactos de performance, latencia, memoria, IO, concurrencia y escalabilidad. Proponé optimizaciones concretas.";
   if (key.includes("architecture")) return "# Agente Architecture\n\nEvaluá la solución contra la arquitectura objetivo, límites de módulos, dependencias, contratos y mantenibilidad.";
@@ -427,6 +436,14 @@ function defaultPromptForTemplate(key: string, project: ProjectInfo): string {
 }
 
 function defaultKnowledgeForTemplate(key: string, project: ProjectInfo): string {
+  if (key.includes("code-review")) {
+    return `# Knowledge general: ${key}
+
+- Revisá legibilidad, simplicidad, diseño, tipos, errores, seguridad básica, tests, compatibilidad y mantenibilidad.
+- Aplicá mejores prácticas del lenguaje/framework detectado y pedí evidencia concreta del cambio revisado.
+- Devolvé hallazgos accionables por severidad con archivo/símbolo si está disponible.
+`;
+  }
   if (key === "project-rules-validator") {
     return `# Knowledge general: ${key}
 
@@ -473,6 +490,7 @@ function defaultKnowledgeForTemplate(key: string, project: ProjectInfo): string 
 }
 
 function projectAgentKnowledge(agentName: string, template: string, project: ProjectInfo): string {
+  const specialization = agentName === "code-review" ? "\n- Objetivo específico: revisar código/diffs contra mejores prácticas del lenguaje/framework y reglas propias del proyecto. Clasificá hallazgos por severidad (bloqueante, alto, medio, bajo) e incluí evidencia concreta." : "";
   return `# Knowledge general del agente ${agentName}
 
 - Template base: ${template}.
@@ -482,7 +500,7 @@ function projectAgentKnowledge(agentName: string, template: string, project: Pro
 - Framework: ${project.framework ?? "no detectado"}.
 - Arquitectura detectada: ${project.architecture}.
 - Build/package manager: ${project.buildTool ?? project.packageManager ?? "no detectado"}.
-- Priorizá cambios pequeños, testeables, observables y compatibles con el estilo existente.
+- Priorizá cambios pequeños, testeables, observables y compatibles con el estilo existente.${specialization}
 `;
 }
 
