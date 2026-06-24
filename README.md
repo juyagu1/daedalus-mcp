@@ -70,6 +70,7 @@ Daedalus also registers MCP prompts named `daedalus` and `daedalus-init`. In cli
 /daedalus init
 /daedalus listProjects
 /daedalus plan --group:java-all "agregar healthcheck estándar"
+/daedalus review --group:java-all "revisar el diff actual"
 ```
 
 If the client says the slash command does not exist, use natural language or the `daedalus` tool directly, for example: “Use Daedalus and run `/daedalus init`”. Slash command availability is controlled by the host client, not by the MCP server alone.
@@ -166,6 +167,27 @@ Default `plan` pipeline:
 
 ```txt
 plan -> rules -> performance -> architecture
+```
+
+
+### `daedalus_review`
+
+Runs the code-review pipeline over a group or selected projects. It reviews code, diffs, files or change descriptions using language/framework best practices and project-specific rules.
+
+Slash-style examples:
+
+```txt
+/daedalus review --group:java-all "revisar el diff actual"
+```
+
+```txt
+/daedalus review --project [catalog,data-mirror] "revisar cambios de healthcheck"
+```
+
+Default `review` pipeline:
+
+```txt
+code-review -> rules -> performance -> architecture
 ```
 
 ### `daedalus`
@@ -280,6 +302,7 @@ Restart Claude Code after creating or changing this file. Then use:
 /daedalus init
 /daedalus listProjects
 /daedalus plan --group:java-all "agregar healthcheck estándar"
+/daedalus review --group:java-all "revisar el diff actual"
 ```
 
 ## Add to Claude Desktop
@@ -367,6 +390,12 @@ Run a plan for all Java projects:
 
 ```txt
 Use Daedalus and run /daedalus plan --group:java-all "agregar healthcheck estándar"
+```
+
+Run a code review for all Java projects:
+
+```txt
+Use Daedalus and run /daedalus review --group:java-all "revisar el diff actual"
 ```
 
 Run a plan for specific projects:
